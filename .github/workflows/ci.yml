@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+          - os: windows-2022
+            platform: windows-mingw
+          - os: macos-14
+            platform: macos
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build pkg-config gcc
+
+      - name: macOS deps
+        if: runner.os == 'macOS'
+        run: |
+          brew install meson ninja pkg-config
+
+      - name: MSYS2 setup (MinGW)
+        if: matrix.platform == 'windows-mingw'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+
+      - name: Build & test (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          meson setup build --buildtype=release
+          meson compile -C build
+          meson test -C build --print-errorlogs
+
+      - name: Build & test (Windows MinGW)
+        if: matrix.platform == 'windows-mingw'
+        shell: msys2 {0}
+        run: |
+          meson setup build --buildtype=release
+          meson compile -C build
+          meson test -C build --print-errorlogs
+
+      - name: Install
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "windows-mingw" ]; then
+            export MSYSTEM=MINGW64
+            source /etc/profile
+          fi
+          DESTDIR="${PWD}/install" meson install -C build
+          cd install
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            INSTALL_ROOT=$(find . -type d -name mingw64 | head -1)
+            tar czf ../libserialport-${{ matrix.platform }}.tar.gz -C $INSTALL_ROOT .
+          else
+            INSTALL_ROOT=$(find . -type d -name include | head -1 | sed 's|/include$||')
+            tar czf ../libserialport-${{ matrix.platform }}.tar.gz -C $INSTALL_ROOT .
+          fi
+
+      - name: Upload artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: libserialport-${{ matrix.platform }}
+          path: libserialport-*.tar.gz
+
+  build-msvc:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Setup Python & Meson
+        run: |
+          python -m pip install --upgrade pip
+          pip install meson ninja
+
+      - name: Build (MSVC static /MD)
+        shell: pwsh
+        run: |
+          meson setup build --buildtype=release --default-library=static -Db_vscrt=md
+          meson compile -C build
+          meson test -C build --print-errorlogs
+
+      - name: Install
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          meson install -C build --destdir="$pwd\install"
+          $installRoot = (Get-ChildItem -Path install -Recurse -Directory -Filter include | Select-Object -First 1).Parent.FullName
+          tar czf libserialport-windows-msvc.tar.gz -C $installRoot .
+
+      - name: Upload artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: libserialport-windows-msvc
+          path: libserialport-*.tar.gz
+
+  release:
+    needs: [build, build-msvc]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/*/libserialport-*.tar.gz
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
