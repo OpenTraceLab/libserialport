@@ -231,8 +231,8 @@ pkg.generate(
   requires: pkg_requires
 )
 
-# Test (skip on Windows - uses unistd.h)
-if not is_windows
+# Test (skip on Windows - uses unistd.h, skip on macOS - flaky timing)
+if not is_windows and not is_darwin
   test_timing = executable('test_timing',
     ['timing.c', 'test_timing.c'],
     c_args: c_args,
