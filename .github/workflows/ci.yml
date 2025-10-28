@@ -159,7 +159,7 @@ jobs:
         run: |
           meson install -C build --destdir="$pwd\install"
           $installRoot = (Get-ChildItem -Path install -Recurse -Directory -Filter include | Select-Object -First 1).Parent.FullName
-          tar czf libserialport-windows-msvc.tar.gz -C $installRoot .
+          tar czf libserialport-windows-msvc.tar.gz -C $installRoot bin include lib
 
       - name: Upload artifact
         if: startsWith(github.ref, 'refs/tags/v')
