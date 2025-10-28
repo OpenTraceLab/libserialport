@@ -3,7 +3,8 @@ project('libserialport', 'c',
   default_options: [
     'warning_level=2',
     'c_std=c99',
-    'b_vscrt=md'  # /MD for MSVC (matches OBS CRT)
+    'b_vscrt=md',
+    'default_library=shared'
   ])
 
 cc = meson.get_compiler('c')
@@ -41,7 +42,6 @@ conf_data.set_quoted('SP_LIB_VERSION_STRING', sp_lib_version)
 
 # Platform-specific checks
 if is_linux
-  # Check for termios structures
   if cc.has_type('struct termios2', prefix: '#include <linux/termios.h>')
     conf_data.set('HAVE_STRUCT_TERMIOS2', 1)
   endif
@@ -62,19 +62,16 @@ if is_linux
     conf_data.set('HAVE_STRUCT_TERMIOS2_C_OSPEED', 1)
   endif
   
-  # Check for BOTHER
   if cc.has_header_symbol('linux/termios.h', 'BOTHER')
     conf_data.set('HAVE_DECL_BOTHER', 1)
   else
     conf_data.set('HAVE_DECL_BOTHER', 0)
   endif
   
-  # Check for serial_struct
   if cc.has_type('struct serial_struct', prefix: '#include <linux/serial.h>')
     conf_data.set('HAVE_STRUCT_SERIAL_STRUCT', 1)
   endif
   
-  # Set speed flags
   if conf_data.has('HAVE_STRUCT_TERMIOS_C_ISPEED') and conf_data.has('HAVE_STRUCT_TERMIOS_C_OSPEED')
     conf_data.set('HAVE_TERMIOS_SPEED', 1)
   endif
@@ -90,7 +87,6 @@ if is_darwin
   endif
 endif
 
-# Check for functions
 if cc.has_function('realpath')
   conf_data.set('HAVE_REALPATH', 1)
 endif
@@ -125,12 +121,10 @@ else
   endif
 endif
 
-# Check for size_t
 if not cc.has_type('size_t', prefix: '#include <stddef.h>')
   conf_data.set('size_t', 'unsigned int')
 endif
 
-# Enumeration support
 if not (is_linux or is_darwin or is_windows or is_freebsd)
   conf_data.set('NO_ENUMERATION', 1)
   conf_data.set('NO_PORT_METADATA', 1)
@@ -143,31 +137,30 @@ config_h = configure_file(
 )
 
 # Compiler flags
-c_args = [
-  '-Wall',
-  '-Wextra',
-  '-pedantic',
-  '-Wmissing-prototypes',
-  '-Wshadow',
-  '-DLIBSERIALPORT_ATBUILD'
-]
+c_args = ['-DLIBSERIALPORT_ATBUILD', '-DLIBSERIALPORT_BUILD']
 
-# Windows-specific defines for MSVC
-if is_windows and cc.get_id() == 'msvc'
+if cc.get_id() == 'msvc'
   c_args += [
     '-DWIN32_LEAN_AND_MEAN',
     '-DNOMINMAX',
     '-D_CRT_SECURE_NO_WARNINGS',
     '-D_WIN32_WINNT=0x0601'
   ]
-  # Remove GCC-specific flags
-  c_args = ['-DLIBSERIALPORT_ATBUILD', '-DWIN32_LEAN_AND_MEAN', '-DNOMINMAX', '-D_CRT_SECURE_NO_WARNINGS', '-D_WIN32_WINNT=0x0601']
-elif is_windows
+else
   c_args += [
-    '-DWIN32_LEAN_AND_MEAN',
-    '-DNOMINMAX',
-    '-D_WIN32_WINNT=0x0601'
+    '-Wall',
+    '-Wextra',
+    '-pedantic',
+    '-Wmissing-prototypes',
+    '-Wshadow'
   ]
+  if is_windows
+    c_args += [
+      '-DWIN32_LEAN_AND_MEAN',
+      '-DNOMINMAX',
+      '-D_WIN32_WINNT=0x0601'
+    ]
+  endif
 endif
 
 # Core sources
@@ -189,15 +182,18 @@ endif
 
 # Dependencies
 deps = []
-link_args = []
 
 if is_windows
   deps += cc.find_library('setupapi')
+  deps += cc.find_library('Ws2_32', required: false)
 elif is_darwin
   deps += dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation'])
 elif is_freebsd
   deps += dependency('libusb-2.0', required: false)
 endif
+
+# Include directories
+inc = include_directories('.')
 
 # Build library
 libserialport = library('serialport',
@@ -205,6 +201,7 @@ libserialport = library('serialport',
   config_h,
   c_args: c_args,
   dependencies: deps,
+  include_directories: inc,
   version: sp_version,
   soversion: sp_lib_current - sp_lib_age,
   install: true
@@ -217,7 +214,7 @@ install_headers('libserialport.h')
 pkg = import('pkgconfig')
 pkg_libs = []
 if is_windows
-  pkg_libs = ['-lsetupapi']
+  pkg_libs = ['-lsetupapi', '-lWs2_32']
 endif
 
 pkg_requires = []
@@ -234,17 +231,21 @@ pkg.generate(
   requires: pkg_requires
 )
 
-# Test
-test_timing = executable('test_timing',
-  ['timing.c', 'test_timing.c'],
-  c_args: c_args,
-  install: false
-)
+# Test (skip on Windows - uses unistd.h)
+if not is_windows
+  test_timing = executable('test_timing',
+    ['timing.c', 'test_timing.c'],
+    c_args: c_args,
+    include_directories: inc,
+    install: false
+  )
+  test('timing', test_timing)
+endif
 
-test('timing', test_timing)
-
-# Examples
-subdir('examples')
+# Examples (skip on Windows - need porting)
+if get_option('examples') and not is_windows
+  subdir('examples')
+endif
 
 # Summary
 summary({

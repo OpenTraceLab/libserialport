@@ -27,6 +27,20 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+/* Windows headers must come early for MSVC */
+#if defined(_WIN32)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <winioctl.h>
+#endif
+
 /* These feature test macros must appear before other headers.*/
 #if defined(__linux__) || defined(__CYGWIN__)
 /* For timeradd, timersub, timercmp, realpath. */
