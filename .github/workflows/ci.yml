@@ -150,7 +150,7 @@ jobs:
       - name: Build (MSVC static /MD)
         shell: pwsh
         run: |
-          meson setup build --buildtype=release --default-library=static -Db_vscrt=md
+          meson setup build --buildtype=release -Db_vscrt=md
           meson compile -C build
           meson test -C build --print-errorlogs
 

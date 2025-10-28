@@ -111,13 +111,19 @@ if cc.compiles(visibility_code, name: 'visibility attribute')
   conf_data.set('SP_API', '__attribute__((visibility("default")))')
   conf_data.set('SP_PRIV', '__attribute__((visibility("hidden")))')
 else
-  declspec_code = '__declspec(dllexport) void foo(void) {}'
-  if cc.compiles(declspec_code, name: 'declspec')
-    conf_data.set('SP_API', '__declspec(dllexport)')
-    conf_data.set('SP_PRIV', '')
-  else
+  # For static libs, SP_API should be empty
+  if get_option('default_library') == 'static'
     conf_data.set('SP_API', '')
     conf_data.set('SP_PRIV', '')
+  else
+    declspec_code = '__declspec(dllexport) void foo(void) {}'
+    if cc.compiles(declspec_code, name: 'declspec')
+      conf_data.set('SP_API', '__declspec(dllexport)')
+      conf_data.set('SP_PRIV', '')
+    else
+      conf_data.set('SP_API', '')
+      conf_data.set('SP_PRIV', '')
+    endif
   endif
 endif
 

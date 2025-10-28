@@ -39,11 +39,11 @@
 #endif
 #include <windows.h>
 #include <winioctl.h>
-/* Define min/max since NOMINMAX removes them */
-#ifndef min
+/* Define min/max since NOMINMAX removes them - but only if not already defined by stdlib */
+#if !defined(min) && !defined(__cplusplus)
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
-#ifndef max
+#if !defined(max) && !defined(__cplusplus)
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 #endif
