@@ -143,7 +143,7 @@ config_h = configure_file(
 )
 
 # Compiler flags
-c_args = ['-DLIBSERIALPORT_ATBUILD', '-DLIBSERIALPORT_BUILD']
+c_args = ['-DLIBSERIALPORT_ATBUILD', '-DLIBSERIALPORT_MSBUILD']
 
 if cc.get_id() == 'msvc'
   c_args += [
