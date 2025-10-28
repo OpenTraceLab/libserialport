@@ -107,19 +107,22 @@ jobs:
           meson compile -C build
           meson test -C build --print-errorlogs
 
-      - name: Install
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: ${{ matrix.platform == 'windows-mingw' && 'msys2 {0}' || 'bash' }}
+      - name: Install (Linux/macOS)
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os != 'Windows'
         run: |
           DESTDIR="${PWD}/install" meson install -C build
           cd install
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            INSTALL_ROOT=$(find . -type d -name mingw64 | head -1)
-            tar czf ../libserialport-${{ matrix.platform }}.tar.gz -C $INSTALL_ROOT .
-          else
-            INSTALL_ROOT=$(find . -type d -name include | head -1 | sed 's|/include$||')
-            tar czf ../libserialport-${{ matrix.platform }}.tar.gz -C $INSTALL_ROOT .
-          fi
+          INSTALL_ROOT=$(find . -type d -name include | head -1 | sed 's|/include$||')
+          tar czf ../libserialport-${{ matrix.platform }}.tar.gz -C $INSTALL_ROOT .
+
+      - name: Install (Windows MinGW)
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'windows-mingw'
+        shell: msys2 {0}
+        run: |
+          DESTDIR="${PWD}/install" meson install -C build
+          cd install
+          INSTALL_ROOT=$(find . -type d -name mingw64 | head -1)
+          tar czf ../libserialport-${{ matrix.platform }}.tar.gz -C $INSTALL_ROOT .
 
       - name: Upload artifact
         if: startsWith(github.ref, 'refs/tags/v')
