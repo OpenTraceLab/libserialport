@@ -29,16 +29,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: |
+            $HOME/.cache/ccache
+            $HOME/.cache/meson
+          key: linux-${{ hashFiles('**/meson.build','**/meson_options.txt') }}
+          restore-keys: linux-
+
+      - name: Cache (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            $HOME/.cache/ccache
+            $HOME/.cache/meson
+          key: mac-${{ hashFiles('**/meson.build','**/meson_options.txt') }}
+          restore-keys: mac-
+
+      - name: Cache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\Users\runneradmin\.ccache
+            C:\Users\runneradmin\AppData\Local\meson
+          key: win-${{ hashFiles('**/meson.build','**/meson_options.txt') }}
+          restore-keys: win-
+
       - name: Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build pkg-config gcc
+          sudo apt-get install -y meson ninja-build pkg-config gcc ccache
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.cache/ccache" "$HOME/.cache/meson"
 
       - name: macOS deps
         if: runner.os == 'macOS'
         run: |
-          brew install meson ninja pkg-config
+          brew install meson ninja pkg-config ccache
+          echo "$(brew --prefix ccache)/libexec" >> "$GITHUB_PATH"
+          echo "XDG_CACHE_HOME=$HOME/.cache" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$HOME/.cache/ccache" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.cache/ccache" "$HOME/.cache/meson"
 
       - name: MSYS2 setup (MinGW)
         if: matrix.platform == 'windows-mingw'
@@ -50,6 +86,7 @@ jobs:
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-meson
             mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-ccache
             mingw-w64-x86_64-pkg-config
 
       - name: Build & test (Linux/macOS)
@@ -63,6 +100,9 @@ jobs:
         if: matrix.platform == 'windows-mingw'
         shell: msys2 {0}
         run: |
+          export CCACHE_DIR=/c/Users/runneradmin/.ccache
+          export XDG_CACHE_HOME=/c/Users/runneradmin/AppData/Local
+          mkdir -p "$CCACHE_DIR"
           meson setup build --buildtype=release
           meson compile -C build
           meson test -C build --print-errorlogs
