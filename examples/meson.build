@@ -12,6 +12,7 @@ if get_option('examples')
     executable(example,
       example + '.c',
       link_with: libserialport,
+      include_directories: inc,
       install: false
     )
   endforeach

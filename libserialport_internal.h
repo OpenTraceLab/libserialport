@@ -39,6 +39,13 @@
 #endif
 #include <windows.h>
 #include <winioctl.h>
+/* Define min/max since NOMINMAX removes them */
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif
 #endif
 
 /* These feature test macros must appear before other headers.*/
